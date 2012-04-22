@@ -11,7 +11,7 @@ mem_fault: halt
 ;R6 - pop1
 ;R7 - void, temp and pop2
 
-0x0100: load ONE R1;start of word = true
+0x0100: load #1 R1;start of word = true
 main:   load 0xfff1 R0
         jumpnz R0 getchar
         jump main
@@ -41,40 +41,48 @@ getchar: load 0xfff0 R0 ;loading char into register
 newline:   load #'\n' R5
            sub R0 R5 R5
            jumpnz R5 space
+checkinteger:jumpz R4 checkstack
+             push R4;integer was found at end of line
+             jump nohalt;stack has entry so don't halt
+checkstack:load #0x7000 R6;stopping only if stack is empty
+           load SP R7
+           sub R6 R7 R7
+           jumpnz R7 nohalt
+           halt
            ;ignoring exit for now
 nohalt:    jumpz R2 notminus
            pop R6
            pop R7
            sub R7 R6 R7;check correctness of order
            push R7
-           load ZERO R2;got minus = false
+           load #0 R2;got minus = false
 notminus:  pop R7;put answer into R7
 display:   load #'0' R1;displaying integer in R7 as chars
 dcheckneg: jumpn R7 displayneg
            jump displaynum
 displayneg:load #'-' R5;displaying negative sign
            store R5 0xfff0
-           mult R7 MONE R7;negate
+           mult R7 MONE R7;negate;not sure if necessary
 displaynum:load thousandmillion R3;maximum required display int is 2147483647           
            load #10 R2
-           load ZERO R0;true if the start of the integer has been found
+           load #0 R0;true if the start of the integer has been found
            jump rdisplay
 reduce:    div R3 R2 R3
            sub R3 ONE R6
-           jumpz R6 complete;found a one so complete
+           jumpz R6 complete;found ones column so complete
 rdisplay:  div R7 R3 R6
            jumpnz R0 jumpcheck;number found already so display all 0's
            jumpz R6 reduce
 jumpcheck: add R1 R6 R6
            store R6 0xfff0
            mod R7 R3 R7
-           load ONE R0
+           load #1 R0
            jump reduce
 complete:  add R1 R7 R7;displaying ones column
            store R7 0xfff0
-reset:     load ONE R1;start of word = true
-           load ZERO R2;got minus = false
-           load ZERO R4;integer = 0
+reset:     load #1 R1;start of word = true
+           load #0 R2;got minus = false
+           load #0 R4;integer = 0
            jump main
 
 ;    else if(i == ' ')
@@ -104,17 +112,17 @@ space:    load #' ' R5
           ;to succeed in pushing int R1=0
 checkword:jumpnz R1 checksub;if not start of word then push integer
 checkneg: jumpz R2 pushint;if got minus then negate integer
-          load ZERO R2;got minus = false
+          load #0 R2;got minus = false
           mult R4 MONE R4;negate integer
 pushint:  push R4;push integer
-          load ONE R1;start of word = true
-          load ZERO R4;zero integer
+          load #1 R1;start of word = true
+          load #0 R4;integer = 0
 checksub: jumpz R2 main;if got minus then perform subtraction
           pop R6
           pop R7
           sub R7 R6 R7
           push R7
-          load ZERO R2;got minus = false           
+          load #0 R2;got minus = false           
           jump main
        
 ;    else if(i == '+') 
@@ -135,7 +143,7 @@ add: load #'+' R5
 sub: load #'-' R5
      sub R0 R5 R5
      jumpnz R5 mul
-     load ONE R2;got minus = true
+     load #1 R2;got minus = true
      jump main
      
 ;    else if(i == '*') 
@@ -181,20 +189,7 @@ rem: load #'%' R5
      jump main
 
      
-;void power()
-;{
-;  //stack - 3 = var
-;  //stack - 2 = iter
-;  //stack - 1 = original base
-;  
-;  if(stack[stackPointer - 2] == 1) return;//finished power
-;  
-;  stack[stackPointer - 3] *= stack[stackPointer - 1];
-;  stack[stackPointer - 2] -= 1;
-;  power();
-;}
-;
-;
+
 ;    else if(i == '^')
 ;    {
 ;      push(stack[stackPointer - 2]);//power function needs to retain original value
@@ -205,26 +200,30 @@ rem: load #'%' R5
 pow: load #'^' R5
      sub R0 R5 R5
      jumpnz R5 fac
-rpow:     
-     jump main
-
-     
-;void factorial()
+     pop R6;iter
+     sub R6 ONE R6;need 1 less multiplication than given
+     pop R5;original base
+     move R5 R7;final value
+;void power()
 ;{
-;  //stack - 3 = var
-;  //stack - 2 = iter
-;  //stack - 1 = target
+;  //stack - 3 = var = R7
+;  //stack - 2 = iter = R6
+;  //stack - 1 = original base = R5
+;  //temp = R3
 ;  
-;  //Important: factorial zero must result in 0 not 1
-;
-;  if((stack[stackPointer - 1] - stack[stackPointer - 2]) < 0) return;//finished factorial
-;  printf("var: %d iter: %d target: %d\n", stack[stackPointer - 3], stack[stackPointer - 2], stack[stackPointer - 1]);
-;  stack[stackPointer - 3] *= stack[stackPointer - 2];
-;  stack[stackPointer - 2] += 1;
-;  factorial();
+;  if(stack[stackPointer - 2] == 1) return;//finished power
+;  
+;  stack[stackPointer - 3] *= stack[stackPointer - 1];
+;  stack[stackPointer - 2] -= 1;
+;  power();
 ;}
-;
-;    
+rpow:jumpz R6 rpowdone
+     mult R7 R5 R7
+     sub R6 ONE R6
+     jump rpow
+rpowdone: push R7
+          jump main
+        
 ;    else if(i == '!') 
 ;    {
 ;      push(1);//iter
@@ -236,10 +235,44 @@ rpow:
 ;    }
 fac: load #'!' R5
      sub R0 R5 R5
-     jumpnz R5 num;not a useful character so must be part of a number
-rfac:
-     jump main
+     jumpnz R5 zerohandle;not a useful character so must be part of a number
+     load #1 R6
+     load #1 R7;final value
+     pop R5
+     jumpnz R5 rfac;need to return a zero if zero given
+     push R5
+;void factorial()
+;{
+;  //stack - 3 = var = R7
+;  //stack - 2 = iter = R6
+;  //stack - 1 = target = R5
+;  //temp = R3
+;  
+;  //Important: factorial zero must result in 0 not 1
+;
+;  if((stack[stackPointer - 1] - stack[stackPointer - 2]) < 0) return;//finished factorial
+;  printf("var: %d iter: %d target: %d\n", stack[stackPointer - 3], stack[stackPointer - 2], stack[stackPointer - 1]);
+;  stack[stackPointer - 3] *= stack[stackPointer - 2];
+;  stack[stackPointer - 2] += 1;
+;  factorial();
+;}
+rfac: sub R6 R5 R3
+      jumpz R3 rfacdone
+      mult R7 R6 R7
+      add R6 ONE R6;increase multiplier
+      jump rfac
+rfacdone:push R7
+         jump main
 
+
+     
+;Got zero on first char so push zero to stack
+zerohandle: jumpnz R4 num;integer has contents...handle normally
+            load #'0' R5
+            sub R0 R5 R5
+            jumpnz R5 num
+            push ZERO;zero needs to be on the stack
+            jump main
      
 ;    else 
 ;    {
@@ -251,7 +284,7 @@ num: load #'0' R5
      load #10 R7;promote current integer by factor of ten
      mult R4 R7 R4
      add R4 R5 R4;combine promoted integer and input integer
-     load ZERO R1;start of integer = false
+     load #0 R1;start of integer = false
      jump main
           
 thousandmillion: block #1000000000
