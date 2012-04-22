@@ -1,6 +1,8 @@
 mem_fault: halt
 ;io_handle: jump getchar
 
+;Arrian Purcell u5015666 ANU Comp2300 Semester 1 2012
+
 ;In general:
 ;R0 - char i = 0;
 ;R1 - int startOfWord = 1;//where 1 is true and 0 is false
@@ -19,7 +21,7 @@ main:   load 0xfff1 R0
 
 ;i = getchar()
 getchar: load 0xfff0 R0 ;loading char into register
-         store R0 0xfff0 ;outputting char to screen
+         ;store R0 0xfff0 ;debug outputting char to screen
          
 ;    if(i == '\n')
 ;    {
@@ -41,21 +43,23 @@ getchar: load 0xfff0 R0 ;loading char into register
 newline:   load #'\n' R5
            sub R0 R5 R5
            jumpnz R5 space
-checkinteger:jumpz R4 checkstack
-             push R4;integer was found at end of line
-             jump nohalt;stack has entry so don't halt
+checkinteger:jumpz R4 checkstack;no new number
+             jumpz R2 pushnew;no negation sign
+             mult R4 MONE R4;negate
+             ;load #0 R2;dealt with negate
+pushnew:     push R4;integer was found at end of line
+             jump notminus;stack has entry so don't halt and dealt with negative
 checkstack:load #0x7000 R6;stopping only if stack is empty
-           load SP R7
-           sub R6 R7 R7
+           move SP R7;get stack pointer
+           sub R6 R7 R7;check if stack has items
            jumpnz R7 nohalt
            halt
-           ;ignoring exit for now
 nohalt:    jumpz R2 notminus
            pop R6
            pop R7
-           sub R7 R6 R7;check correctness of order
+           sub R7 R6 R7;perform end of line subtraction
            push R7
-           load #0 R2;got minus = false
+           ;load #0 R2;got minus = false
 notminus:  pop R7;put answer into R7
 display:   load #'0' R1;displaying integer in R7 as chars
 dcheckneg: jumpn R7 displayneg
@@ -80,9 +84,12 @@ jumpcheck: add R1 R6 R6
            jump reduce
 complete:  add R1 R7 R7;displaying ones column
            store R7 0xfff0
+           load #'\n' R1
+           store R1 0xfff0;newline
 reset:     load #1 R1;start of word = true
            load #0 R2;got minus = false
            load #0 R4;integer = 0
+           ;load #0x7000 SP;reset stack
            jump main
 
 ;    else if(i == ' ')
@@ -135,7 +142,7 @@ add: load #'+' R5
      jumpnz R5 sub
      pop R6
      pop R7
-     add R6 R7 R7
+     add R7 R6 R7
      push R7
      jump main
 
@@ -156,7 +163,7 @@ mul: load #'*' R5
      jumpnz R5 div
      pop R6
      pop R7
-     mult R6 R7 R7
+     mult R7 R6 R7
      push R7
      jump main
 
@@ -170,7 +177,7 @@ div: load #'/' R5
      jumpnz R5 rem
      pop R6
      pop R7
-     div R6 R7 R7
+     div R7 R6 R7
      push R7
      jump main
 
@@ -184,7 +191,7 @@ rem: load #'%' R5
      jumpnz R5 pow
      pop R6
      pop R7
-     mod R6 R7 R7
+     mod R7 R6 R7
      push R7
      jump main
 
@@ -204,6 +211,7 @@ pow: load #'^' R5
      sub R6 ONE R6;need 1 less multiplication than given
      pop R5;original base
      move R5 R7;final value
+     jumpz R7 rpowdone;zero base, return 0
 ;void power()
 ;{
 ;  //stack - 3 = var = R7
@@ -219,8 +227,10 @@ pow: load #'^' R5
 ;}
 rpow:jumpz R6 rpowdone
      mult R7 R5 R7
+     jumpz R7 zeropow
      sub R6 ONE R6
      jump rpow
+zeropow: load #1 R7;if the power is zero then need a one on stack
 rpowdone: push R7
           jump main
         
@@ -241,6 +251,7 @@ fac: load #'!' R5
      pop R5
      jumpnz R5 rfac;need to return a zero if zero given
      push R5
+     jump main
 ;void factorial()
 ;{
 ;  //stack - 3 = var = R7
@@ -256,7 +267,8 @@ fac: load #'!' R5
 ;  stack[stackPointer - 2] += 1;
 ;  factorial();
 ;}
-rfac: sub R6 R5 R3
+rfac: sub R5 R6 R3
+      add ONE R3 R3;temp debug
       jumpz R3 rfacdone
       mult R7 R6 R7
       add R6 ONE R6;increase multiplier
