@@ -18,10 +18,33 @@ main:   load 0xfff1 R0
         jumpnz R0 getchar
         jump main
         
-
 ;i = getchar()
 getchar: load 0xfff0 R0 ;loading char into register
-         ;store R0 0xfff0 ;debug outputting char to screen
+         ;store R0 0xfff0 ;debug outputting char to screen    
+         load #0x0200 R3
+         add R0 R3 R3
+         move R3 PC;jump to ascii lookup table
+         
+;static ascii input lookup table 
+0x020a:jump newline
+0x0220:jump space
+0x0221:jump fac
+0x0225:jump rem
+0x022a:jump mul
+0x022b:jump add
+0x022d:jump sub
+0x022f:jump div
+0x0230:jump zero
+0x0231:jump num
+0x0232:jump num
+0x0233:jump num
+0x0234:jump num
+0x0235:jump num
+0x0236:jump num
+0x0237:jump num
+0x0238:jump num
+0x0239:jump num
+0x025e:jump pow
          
 ;    if(i == '\n')
 ;    {
@@ -40,9 +63,7 @@ getchar: load 0xfff0 R0 ;loading char into register
 ;        integer = 0;//clear integer. not sure if necessary
 ;      }
 ;    }
-newline:   load #'\n' R5
-           sub R0 R5 R5
-           jumpnz R5 space
+newline:   
 checkinteger:jumpz R4 checkstack;no new number
              jumpz R2 pushnew;no negation sign
              mult R4 MONE R4;negate
@@ -113,11 +134,7 @@ reset:     load #1 R1;start of word = true
 ;        pop();
 ;      }
 ;    }
-space:    load #' ' R5
-          sub R0 R5 R5
-          jumpnz R5 add
-          ;to succeed in pushing int R1=0
-checkword:jumpnz R1 checksub;if not start of word then push integer
+space:    jumpnz R1 checksub;if not start of word then push integer
 checkneg: jumpz R2 pushint;if got minus then negate integer
           load #0 R2;got minus = false
           mult R4 MONE R4;negate integer
@@ -137,20 +154,14 @@ checksub: jumpz R2 main;if got minus then perform subtraction
 ;      stack[stackPointer - 2] += stack[stackPointer - 1];
 ;      pop();
 ;    }
-add: load #'+' R5
-     sub R0 R5 R5
-     jumpnz R5 sub
-     pop R6
+add: pop R6
      pop R7
      add R7 R6 R7
      push R7
      jump main
 
 ;    else if(i == '-') gotMinus = 1;      
-sub: load #'-' R5
-     sub R0 R5 R5
-     jumpnz R5 mul
-     load #1 R2;got minus = true
+sub: load #1 R2;got minus = true
      jump main
      
 ;    else if(i == '*') 
@@ -158,10 +169,7 @@ sub: load #'-' R5
 ;      stack[stackPointer - 2] *= stack[stackPointer - 1];
 ;      pop();
 ;    }
-mul: load #'*' R5
-     sub R0 R5 R5
-     jumpnz R5 div
-     pop R6
+mul: pop R6
      pop R7
      mult R7 R6 R7
      push R7
@@ -172,10 +180,7 @@ mul: load #'*' R5
 ;      stack[stackPointer - 2] /= stack[stackPointer - 1];
 ;      pop();
 ;    }
-div: load #'/' R5
-     sub R0 R5 R5
-     jumpnz R5 rem
-     pop R6
+div: pop R6
      pop R7
      div R7 R6 R7
      push R7
@@ -186,10 +191,7 @@ div: load #'/' R5
 ;      stack[stackPointer - 2] %= stack[stackPointer - 1];
 ;      pop();
 ;    }
-rem: load #'%' R5
-     sub R0 R5 R5
-     jumpnz R5 pow
-     pop R6
+rem: pop R6
      pop R7
      mod R7 R6 R7
      push R7
@@ -204,10 +206,7 @@ rem: load #'%' R5
 ;      pop();
 ;      pop();
 ;    }
-pow: load #'^' R5
-     sub R0 R5 R5
-     jumpnz R5 fac
-     pop R6;iter
+pow: pop R6;iter
      sub R6 ONE R6;need 1 less multiplication than given
      pop R5;original base
      move R5 R7;final value
@@ -243,48 +242,19 @@ rpowdone: push R7
 ;      pop();//only need two pops because factorial takes one argument
 ;      pop();
 ;    }
-fac: load #'!' R5
-     sub R0 R5 R5
-     jumpnz R5 zerohandle;not a useful character so must be part of a number
-     load #1 R6
-     load #1 R7;final value
-     pop R5
-     jumpnz R5 rfac;need to return a zero if zero given
-     push R5
+fac: pop R7
+     load #factoriallookup R6;loading factorial from lookup table
+     add R6 R7 R7
+     load R7 R7
+     push R7
      jump main
-;void factorial()
-;{
-;  //stack - 3 = var = R7
-;  //stack - 2 = iter = R6
-;  //stack - 1 = target = R5
-;  //temp = R3
-;  
-;  //Important: factorial zero must result in 0 not 1
-;
-;  if((stack[stackPointer - 1] - stack[stackPointer - 2]) < 0) return;//finished factorial
-;  printf("var: %d iter: %d target: %d\n", stack[stackPointer - 3], stack[stackPointer - 2], stack[stackPointer - 1]);
-;  stack[stackPointer - 3] *= stack[stackPointer - 2];
-;  stack[stackPointer - 2] += 1;
-;  factorial();
-;}
-rfac: sub R5 R6 R3
-      add ONE R3 R3;temp debug
-      jumpz R3 rfacdone
-      mult R7 R6 R7
-      add R6 ONE R6;increase multiplier
-      jump rfac
-rfacdone:push R7
-         jump main
 
 
      
 ;Got zero on first char so push zero to stack
-zerohandle: jumpnz R4 num;integer has contents...handle normally
-            load #'0' R5
-            sub R0 R5 R5
-            jumpnz R5 num
-            push ZERO;zero needs to be on the stack
-            jump main
+zero: jumpnz R4 num;integer has contents...handle normally
+      push ZERO;zero needs to be on the stack
+      jump main
      
 ;    else 
 ;    {
@@ -300,3 +270,17 @@ num: load #'0' R5
      jump main
           
 thousandmillion: block #1000000000
+
+factoriallookup: block #0;0!
+                 block #1
+                 block #2
+                 block #6
+                 block #24
+                 block #120
+                 block #720
+                 block #5040
+                 block #40320
+                 block #362880
+                 block #3628800
+                 block #39916800
+                 block #479001600;12!
