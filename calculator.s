@@ -1,40 +1,41 @@
 mem_fault: halt
-;io_handle: jump getchar
 
 ;Arrian Purcell u5015666 ANU Comp2300 Semester 1 2012
 
-;In general:
-;R0 - char i = 0;
-;R1 - int startOfWord = 1;//where 1 is true and 0 is false
-;R2 - int gotMinus = 0;
-;R3 - ;
-;R4 - int integer = 0;
-;R5 - inputComparison (eg. + - etc)
-;R6 - pop1
-;R7 - void, temp and pop2
+;General register use
+;R0 - char i = 0; input char
+;R1 - int startOfWord = 1; where 1 is true and 0 is false
+;R2 - int gotMinus = 0; where 1 is true and 0 is false
+;R3 - temp
+;R4 - int integer = 0; input integer
+;R5 - temp
+;R6 - temp
+;R7 - temp
 
+;Main
 0x0100: load #1 R1;start of word = true
 main:   load 0xfff1 R0
         jumpnz R0 getchar
         jump main
         
-;i = getchar()
+;Getting input char
 getchar: load 0xfff0 R0 ;loading char into register
          ;store R0 0xfff0 ;debug outputting char to screen    
          load #0x0200 R3
          add R0 R3 R3
          move R3 PC;jump to ascii lookup table
          
-;static ascii input lookup table 
-0x020a:jump newline
-0x0220:jump space
-0x0221:jump fac
-0x0225:jump rem
-0x022a:jump mul
-0x022b:jump add
-0x022d:jump sub
-0x022f:jump div
-0x0230:jump zero
+;Operation lookup table
+0x020a:jump newline;'\n'
+0x0220:jump space;' '
+0x0221:jump fac;'!'
+0x0225:jump rem;'%'
+0x022a:jump mul;'*'
+0x022b:jump add;'+'
+0x022d:load #1 R2;'-' got minus = true
+       jump main
+0x022f:jump div;'/'
+0x0230:jump zero;'0'
 0x0231:jump num
 0x0232:jump num
 0x0233:jump num
@@ -44,30 +45,29 @@ getchar: load 0xfff0 R0 ;loading char into register
 0x0237:jump num
 0x0238:jump num
 0x0239:jump num
-0x025e:jump pow
+
+;Power procedure
+0x025e:pop R6;'^' iter
+       sub R6 ONE R6;need 1 less multiplication than given
+       pop R5;original base
+       move R5 R7;final value
+       jumpz R7 rpowdone;zero base, return 0
+
+;Recursive power procedure
+rpow:jumpz R6 rpowdone
+     mult R7 R5 R7
+     jumpz R7 zeropow
+     sub R6 ONE R6
+     jump rpow
+zeropow:  load #1 R7;if the power is zero then need a one on stack
+rpowdone: push R7
+          jump main
          
-;    if(i == '\n')
-;    {
-;      if(stackPointer == 0) exit(1);
-;      else 
-;      {
-;        if(gotMinus == 1)//subtract
-;        {
-;          stack[stackPointer - 2] -= stack[stackPointer - 1];
-;          gotMinus = 0;
-;          pop();
-;        }
-;        printf("answer: %d\n", stack[0]);//output answer
-;        pop();//clearing stack
-;        startOfWord = 1;//begin new line
-;        integer = 0;//clear integer. not sure if necessary
-;      }
-;    }
+;Newline character
 newline:   
 checkinteger:jumpz R4 checkstack;no new number
              jumpz R2 pushnew;no negation sign
              mult R4 MONE R4;negate
-             ;load #0 R2;dealt with negate
 pushnew:     push R4;integer was found at end of line
              jump notminus;stack has entry so don't halt and dealt with negative
 checkstack:load #0x7000 R6;stopping only if stack is empty
@@ -79,9 +79,10 @@ nohalt:    jumpz R2 notminus
            pop R6
            pop R7
            sub R7 R6 R7;perform end of line subtraction
-           push R7
-           ;load #0 R2;got minus = false
+           jump display;skip push pop
 notminus:  pop R7;put answer into R7
+
+;Displaying final answer
 display:   load #'0' R1;displaying integer in R7 as chars
 dcheckneg: jumpn R7 displayneg
            jump displaynum
@@ -110,30 +111,9 @@ complete:  add R1 R7 R7;displaying ones column
 reset:     load #1 R1;start of word = true
            load #0 R2;got minus = false
            load #0 R4;integer = 0
-           ;load #0x7000 SP;reset stack
            jump main
 
-;    else if(i == ' ')
-;    {
-;      if(startOfWord == 0)
-;      {
-;        if(gotMinus == 1)//not sure if this block should be here
-;        {
-;          gotMinus = 0;
-;          integer *= -1;//handling minus sign
-;        }
-;        push(integer);//set top of stack to integer
-;        startOfWord = 1;
-;        integer = 0;
-;      }
-;      
-;      if(gotMinus == 1)//subtract
-;      {
-;        stack[stackPointer - 2] -= stack[stackPointer - 1];
-;        gotMinus = 0;
-;        pop();
-;      }
-;    }
+;Space character
 space:    jumpnz R1 checksub;if not start of word then push integer
 checkneg: jumpz R2 pushint;if got minus then negate integer
           load #0 R2;got minus = false
@@ -149,99 +129,35 @@ checksub: jumpz R2 main;if got minus then perform subtraction
           load #0 R2;got minus = false           
           jump main
        
-;    else if(i == '+') 
-;    { 
-;      stack[stackPointer - 2] += stack[stackPointer - 1];
-;      pop();
-;    }
+;Add character
 add: pop R6
      pop R7
      add R7 R6 R7
      push R7
      jump main
 
-;    else if(i == '-') gotMinus = 1;      
-sub: load #1 R2;got minus = true
-     jump main
-     
-;    else if(i == '*') 
-;    {
-;      stack[stackPointer - 2] *= stack[stackPointer - 1];
-;      pop();
-;    }
+;Multiply character
 mul: pop R6
      pop R7
      mult R7 R6 R7
      push R7
      jump main
 
-;    else if(i == '/')
-;    {    
-;      stack[stackPointer - 2] /= stack[stackPointer - 1];
-;      pop();
-;    }
+;Divide character
 div: pop R6
      pop R7
      div R7 R6 R7
      push R7
      jump main
 
-;    else if(i == '%') 
-;    {
-;      stack[stackPointer - 2] %= stack[stackPointer - 1];
-;      pop();
-;    }
+;Modulus character
 rem: pop R6
      pop R7
      mod R7 R6 R7
      push R7
      jump main
-
      
-
-;    else if(i == '^')
-;    {
-;      push(stack[stackPointer - 2]);//power function needs to retain original value
-;      power();
-;      pop();
-;      pop();
-;    }
-pow: pop R6;iter
-     sub R6 ONE R6;need 1 less multiplication than given
-     pop R5;original base
-     move R5 R7;final value
-     jumpz R7 rpowdone;zero base, return 0
-;void power()
-;{
-;  //stack - 3 = var = R7
-;  //stack - 2 = iter = R6
-;  //stack - 1 = original base = R5
-;  //temp = R3
-;  
-;  if(stack[stackPointer - 2] == 1) return;//finished power
-;  
-;  stack[stackPointer - 3] *= stack[stackPointer - 1];
-;  stack[stackPointer - 2] -= 1;
-;  power();
-;}
-rpow:jumpz R6 rpowdone
-     mult R7 R5 R7
-     jumpz R7 zeropow
-     sub R6 ONE R6
-     jump rpow
-zeropow: load #1 R7;if the power is zero then need a one on stack
-rpowdone: push R7
-          jump main
-        
-;    else if(i == '!') 
-;    {
-;      push(1);//iter
-;      push(stack[stackPointer - 2]);//retain original value as target iter
-;      stack[stackPointer - 3] = 1;//need to start the factorial at one
-;      factorial();
-;      pop();//only need two pops because factorial takes one argument
-;      pop();
-;    }
+;Factorial character
 fac: pop R7
      load #factoriallookup R6;loading factorial from lookup table
      add R6 R7 R7
@@ -249,29 +165,25 @@ fac: pop R7
      push R7
      jump main
 
-
-     
-;Got zero on first char so push zero to stack
-zero: jumpnz R4 num;integer has contents...handle normally
-      push ZERO;zero needs to be on the stack
+;Zero character - if zero is first character then must push to stack
+zero: jumpnz R4 num;integer has contents...handle zero normally
+      push ZERO;need to push zero to stack
       jump main
      
-;    else 
-;    {
-;      integer = integer * 10 + (i - 48);
-;      startOfWord = 0;
-;    }
-num: load #'0' R5
+;Number character - must construct integer from input characters
+num: load #'0' R5;ascii base
      sub R0 R5 R5;convert char to int
-     load #10 R7;promote current integer by factor of ten
+     load #10 R7;promote existing integer by factor of ten
      mult R4 R7 R4
      add R4 R5 R4;combine promoted integer and input integer
      load #0 R1;start of integer = false
      jump main
-          
+
+;Maximum display divisor - 32bit integer
 thousandmillion: block #1000000000
 
-factoriallookup: block #0;0!
+;Factorial lookup table
+factoriallookup: block #1;0!
                  block #1
                  block #2
                  block #6
