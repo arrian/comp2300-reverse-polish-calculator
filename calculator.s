@@ -62,56 +62,54 @@ rpow:jumpz R6 rpowdone
 zeropow:  load #1 R7;if the power is zero then need a one on stack
 rpowdone: push R7
           jump main
-         
+        
+ 
 ;Newline character
-newline:   
+newline:
 checkinteger:jumpz R4 checkstack;no new number
-             jumpz R2 pushnew;no negation sign
+             jumpz R2 display;no negate sign
              mult R4 MONE R4;negate
-pushnew:     push R4;integer was found at end of line
-             jump notminus;stack has entry so don't halt and dealt with negative
+             jump display
 checkstack:load #0x7000 R6;stopping only if stack is empty
            move SP R7;get stack pointer
            sub R6 R7 R7;check if stack has items
            jumpnz R7 nohalt
            halt
-nohalt:    jumpz R2 notminus
-           pop R6
+nohalt:    pop R4
+           jumpz R2 display;no subtract sign
            pop R7
-           sub R7 R6 R7;perform end of line subtraction
-           jump display;skip push pop
-notminus:  pop R7;put answer into R7
+           sub R7 R4 R4;perform end of line subtraction
+           
+;hasstack:       
+;hasneg:
+;hassub:
+
 
 ;Displaying final answer
-display:   load #'0' R1;displaying integer in R7 as chars
-dcheckneg: jumpn R7 displayneg
-           jump displaynum
-displayneg:load #'-' R5;displaying negative sign
-           store R5 0xfff0
-           mult R7 MONE R7;negate;not sure if necessary
-displaynum:load thousandmillion R3;maximum required display int is 2147483647           
-           load #10 R2
-           load #0 R0;true if the start of the integer has been found
-           jump rdisplay
-reduce:    div R3 R2 R3
-           sub R3 ONE R6
-           jumpz R6 complete;found ones column so complete
-rdisplay:  div R7 R3 R6
-           jumpnz R0 jumpcheck;number found already so display all 0's
-           jumpz R6 reduce
-jumpcheck: add R1 R6 R6
-           store R6 0xfff0
-           mod R7 R3 R7
-           load #1 R0
-           jump reduce
-complete:  add R1 R7 R7;displaying ones column
-           store R7 0xfff0
-           load #'\n' R1
-           store R1 0xfff0;newline
-reset:     load #1 R1;start of word = true
-           load #0 R2;got minus = false
-           load #0 R4;integer = 0
-           jump main
+display:    load #'0' R7;displaying integer in R4 as chars
+            load #10 R1
+            load #0x7000 R6
+dcheckneg:  jumpn R4 displayneg
+            jump displaynum
+displayneg: load #'-' R5;displaying negative sign
+            store R5 0xfff0
+            mult R4 MONE R4;negate
+displaynum: mod R4 R1 R2
+            div R4 R1 R4
+            add R7 R2 R2
+            push R2
+            jumpz R4 rstack
+            jump displaynum
+rstack:     pop R1
+            store R1 0xfff0
+            sub R6 SP R5
+            jumpz R5 reset
+            jump rstack
+reset:      store R0 0xfff0;newline
+            load #1 R1;start of word = true
+            load #0 R2;got minus = false
+            load #0 R4;integer = 0
+            jump main
 
 ;Space character
 space:    jumpnz R1 checksub;if not start of word then push integer
