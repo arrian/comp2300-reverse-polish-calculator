@@ -6,7 +6,7 @@ mem_fault: halt
 ;R0 - char i = 0; input char
 ;R1 - int startOfWord = 1; where 1 is true and 0 is false
 ;R2 - int gotMinus = 0; where 1 is true and 0 is false
-;R3 - temp
+;R3 - operation lookup offset
 ;R4 - int integer = 0; input integer
 ;R5 - temp
 ;R6 - temp
@@ -14,16 +14,13 @@ mem_fault: halt
 
 ;Main
 0x0100: load #1 R1;start of word = true
+        load #0x0200 R3; operation lookup offset
 main:   load 0xfff1 R0
         jumpnz R0 getchar
         jump main
         
-;Getting input char
-getchar: load 0xfff0 R0 ;loading char into register
-         ;store R0 0xfff0 ;debug outputting char to screen    
-         load #0x0200 R3
-         add R0 R3 R3
-         move R3 PC;jump to ascii lookup table
+getchar: load 0xfff0 R0 ;loading char into register   
+         add R0 R3 PC;jump to ascii lookup table
          
 ;Operation lookup table
 0x020a:jump newline;'\n'
@@ -35,7 +32,7 @@ getchar: load 0xfff0 R0 ;loading char into register
 0x022d:load #1 R2;'-' got minus = true
        jump main
 0x022f:jump div;'/'
-0x0230:jump zero;'0'
+0x0230:jumpz R4 zero;push zero to stack otherwise handle normally;'0'
 0x0231:jump num
 0x0232:jump num
 0x0233:jump num
@@ -47,22 +44,28 @@ getchar: load 0xfff0 R0 ;loading char into register
 0x0239:jump num
 
 ;Power procedure
-0x025e:pop R6;'^' iter
-       sub R6 ONE R6;need 1 less multiplication than given
-       pop R5;original base
-       move R5 R7;final value
-       jumpz R7 rpowdone;zero base, return 0
+0x025e: pop R6;exponent
+        pop R0;base
+        push R3
+        load #1 R7;result
+        load powmask R4;powmask
+        load #2 R5;divisor
+pow:    jumpz R6 powdone;exp = 0
+        and R6 ONE R3
+        jumpz R3 powend
+        mult R7 R0 R7
+powend: rotate #31 R6 R6
+        and R6 R4 R6;applying mask here
+        div R4 R5 R4;reducing mask
+        mult R0 R0 R0
+        jump pow
+powdone:pop R3
+        load #0 R4;reset
+        push R7;saving answer
+        jump main
 
-;Recursive power procedure
-rpow:jumpz R6 rpowdone
-     mult R7 R5 R7
-     jumpz R7 zeropow
-     sub R6 ONE R6
-     jump rpow
-zeropow:  load #1 R7;if the power is zero then need a one on stack
-rpowdone: push R7
-          jump main
-        
+powmask:block #0x7fffffff
+
  
 ;Newline character
 newline:
@@ -70,19 +73,15 @@ checkinteger:jumpz R4 checkstack;no new number
              jumpz R2 display;no negate sign
              mult R4 MONE R4;negate
              jump display
-checkstack:load #0x7000 R6;stopping only if stack is empty
-           move SP R7;get stack pointer
-           sub R6 R7 R7;check if stack has items
-           jumpnz R7 nohalt
-           halt
-nohalt:    pop R4
-           jumpz R2 display;no subtract sign
-           pop R7
-           sub R7 R4 R4;perform end of line subtraction
-           
-;hasstack:       
-;hasneg:
-;hassub:
+checkstack:  load #0x7000 R6;stopping only if stack is empty
+             move SP R7;get stack pointer
+             sub R6 R7 R7;check if stack has items
+             jumpnz R7 nohalt
+             halt
+nohalt:      pop R4
+             jumpz R2 display;no subtract sign
+             pop R7
+             sub R7 R4 R4;perform end of line subtraction
 
 
 ;Displaying final answer
@@ -164,9 +163,9 @@ fac: pop R7
      jump main
 
 ;Zero character - if zero is first character then must push to stack
-zero: jumpnz R4 num;integer has contents...handle zero normally
-      push ZERO;need to push zero to stack
+zero: push ZERO;need to push zero to stack
       jump main
+
      
 ;Number character - must construct integer from input characters
 num: load #'0' R5;ascii base
@@ -176,9 +175,6 @@ num: load #'0' R5;ascii base
      add R4 R5 R4;combine promoted integer and input integer
      load #0 R1;start of integer = false
      jump main
-
-;Maximum display divisor - 32bit integer
-thousandmillion: block #1000000000
 
 ;Factorial lookup table
 factoriallookup: block #1;0!
